@@ -11,29 +11,26 @@ namespace Copilot_Test.Controllers
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
-        // Simple in-memory store for demonstration/testing purposes.
-        private static readonly List<UserDto> _users = new();
-        private static readonly object _lock = new();
-        private static int _nextId;
+        private readonly Services.IUserService _service;
+
+        public UsersController(Services.IUserService service)
+        {
+            _service = service;
+        }
 
         [HttpGet]
         public ActionResult<IEnumerable<UserDto>> GetAll()
         {
-            lock (_lock)
-            {
-                return Ok(_users);
-            }
+            var users = _service.GetAll();
+            return Ok(users);
         }
 
         [HttpGet("{id:int}")]
         public ActionResult<UserDto> GetById(int id)
         {
-            lock (_lock)
-            {
-                var user = _users.FirstOrDefault(u => u.Id == id);
-                if (user is null) return NotFound();
-                return Ok(user);
-            }
+            var user = _service.GetById(id);
+            if (user is null) return NotFound();
+            return Ok(user);
         }
 
         [HttpPost]
@@ -41,14 +38,7 @@ namespace Copilot_Test.Controllers
         {
             if (request is null) return BadRequest();
 
-            var id = Interlocked.Increment(ref _nextId);
-            var user = new UserDto { Id = id, Name = request.Name, Email = request.Email };
-
-            lock (_lock)
-            {
-                _users.Add(user);
-            }
-
+            var user = _service.Create(request);
             return CreatedAtAction(nameof(GetById), new { id = user.Id }, user);
         }
 
@@ -57,28 +47,16 @@ namespace Copilot_Test.Controllers
         {
             if (request is null) return BadRequest();
 
-            lock (_lock)
-            {
-                var user = _users.FirstOrDefault(u => u.Id == id);
-                if (user is null) return NotFound();
-
-                user.Name = request.Name ?? user.Name;
-                user.Email = request.Email ?? user.Email;
-            }
-
+            var ok = _service.Update(id, request);
+            if (!ok) return NotFound();
             return NoContent();
         }
 
         [HttpDelete("{id:int}")]
         public IActionResult Delete(int id)
         {
-            lock (_lock)
-            {
-                var user = _users.FirstOrDefault(u => u.Id == id);
-                if (user is null) return NotFound();
-                _users.Remove(user);
-            }
-
+            var ok = _service.Delete(id);
+            if (!ok) return NotFound();
             return NoContent();
         }
 
